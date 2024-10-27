@@ -1,155 +1,158 @@
 package com.xuecheng.media;
 
-import com.j256.simplemagic.ContentInfo;
-import com.j256.simplemagic.ContentInfoUtil;
-import io.minio.*;
-import io.minio.errors.*;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
+import io.minio.UploadObjectArgs;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
-import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
+import org.junit.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.*;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-/**
- * @author Mr.M
- * @version 1.0
- * @description 测试minio的sdk
- * @date 2023/2/17 11:55
- */
-public class MinioTest {
-
-    MinioClient minioClient =
+@SpringBootTest
+public class MinIOTest {
+    // 创建MinioClient对象
+    static MinioClient minioClient =
             MinioClient.builder()
-                    .endpoint("http://192.168.101.65:9000")
+                    .endpoint("http://127.0.0.1:9000")
                     .credentials("minioadmin", "minioadmin")
                     .build();
 
+    /**
+     * 上传测试方法
+     */
     @Test
-    public void test_upload() throws Exception {
-
-        //通过扩展名得到媒体资源类型 mimeType
-        //根据扩展名取出mimeType
-        ContentInfo extensionMatch = ContentInfoUtil.findExtensionMatch(".mp4");
-        String mimeType = MediaType.APPLICATION_OCTET_STREAM_VALUE;//通用mimeType，字节流
-        if(extensionMatch!=null){
-            mimeType = extensionMatch.getMimeType();
+    public void uploadTest() {
+        try {
+            minioClient.uploadObject(
+                    UploadObjectArgs.builder()
+                            .bucket("testbucket")
+                            .object("pic01.png")
+                            .filename("C:\\Users\\15863\\Desktop\\Picture\\background\\01.png")
+                            .build()
+            );
+            System.out.println("上传成功");
+        } catch (Exception e) {
+            System.out.println("上传失败");
         }
-
-        //上传文件的参数信息
-        UploadObjectArgs uploadObjectArgs = UploadObjectArgs.builder()
-                .bucket("testbucket")//桶
-                .filename("D:\\develop\\upload\\1.mp4") //指定本地文件路径
-//                .object("1.mp4")//对象名 在桶下存储该文件
-                .object("test/01/1.mp4")//对象名 放在子目录下
-                .contentType(mimeType)//设置媒体文件类型
-                .build();
-
-        //上传文件
-        minioClient.uploadObject(uploadObjectArgs);
-
-
-
-    }
-    //删除文件
-    @Test
-    public void test_delete() throws Exception {
-
-        //RemoveObjectArgs
-        RemoveObjectArgs removeObjectArgs = RemoveObjectArgs.builder().bucket("testbucket").object("1.mp4").build();
-
-        //删除文件
-        minioClient.removeObject(removeObjectArgs);
-
-
-
     }
 
-    //查询文件 从minio中下载
     @Test
-    public void test_getFile() throws Exception {
+    public void deleteTest() {
+        try {
+            minioClient.removeObject(RemoveObjectArgs
+                    .builder()
+                    .bucket("testbucket")
+                    .object("pic01.png")
+                    .build());
+            System.out.println("删除成功");
+        } catch (Exception e) {
+            System.out.println("删除失败");
+        }
+    }
 
-        GetObjectArgs getObjectArgs = GetObjectArgs.builder().bucket("testbucket").object("test/01/1.mp4").build();
-        //查询远程服务获取到一个流对象
-        FilterInputStream inputStream = minioClient.getObject(getObjectArgs);
-        //指定输出流
-        FileOutputStream outputStream = new FileOutputStream(new File("D:\\develop\\upload\\1a.mp4"));
-        IOUtils.copy(inputStream,outputStream);
-
-        //校验文件的完整性对文件的内容进行md5
-        FileInputStream fileInputStream1 = new FileInputStream(new File("D:\\develop\\upload\\1.mp4"));
-        String source_md5 = DigestUtils.md5Hex(fileInputStream1);
-        FileInputStream fileInputStream = new FileInputStream(new File("D:\\develop\\upload\\1a.mp4"));
-        String local_md5 = DigestUtils.md5Hex(fileInputStream);
-        if(source_md5.equals(local_md5)){
+    @Test
+    public void getFileTest() {
+        try {
+            FilterInputStream inputStream = minioClient.getObject(GetObjectArgs.builder()
+                    .bucket("testbucket")
+                    .object("pic01.png")
+                    .build());
+            FileOutputStream fileOutputStream = new FileOutputStream("C:\\Users\\15863\\Desktop\\tmp.png");
+            IOUtils.copy(inputStream, fileOutputStream);
             System.out.println("下载成功");
+        } catch (Exception e) {
+            System.out.println("下载失败");
         }
-
     }
 
-
-    //将分块文件上传到minio
     @Test
-    public void uploadChunk() throws IOException, ServerException, InsufficientDataException, ErrorResponseException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
-
-        for (int i = 0; i < 6; i++) {
-            //上传文件的参数信息
-            UploadObjectArgs uploadObjectArgs = UploadObjectArgs.builder()
-                    .bucket("testbucket")//桶
-                    .filename("D:\\develop\\upload\\chunk\\"+i) //指定本地文件路径
-                    .object("chunk/"+i)//对象名 放在子目录下
-                    .build();
-
-            //上传文件
-            minioClient.uploadObject(uploadObjectArgs);
-            System.out.println("上传分块"+i+"成功");
+    public void testChunk() throws IOException {
+        // 源文件
+        File sourceFile = new File("D:\\BaiduNetdiskDownload\\星际牛仔1998\\星际牛仔1.mp4");
+        // 块文件路径
+        String chunkPath = "D:\\BaiduNetdiskDownload\\星际牛仔1998\\chunk\\";
+        File chunkFolder = new File(chunkPath);
+        if (!chunkFolder.exists()) {
+            chunkFolder.mkdirs();
         }
-
+        // 分块大小 1M
+        long chunkSize = 1024 * 1024 * 1;
+        // 计算块数，向上取整
+        long chunkNum = (long) Math.ceil(sourceFile.length() * 1.0 / chunkSize);
+        // 缓冲区大小
+        byte[] buffer = new byte[1024];
+        // 使用RandomAccessFile访问文件
+        RandomAccessFile raf_read = new RandomAccessFile(sourceFile, "r");
+        // 遍历分块，依次向每一个分块写入数据
+        for (int i = 0; i < chunkNum; i++) {
+            // 创建分块文件，默认文件名 path + i，例如chunk\1  chunk\2
+            File file = new File(chunkPath + i);
+            if (file.exists()){
+                file.delete();
+            }
+            boolean newFile = file.createNewFile();
+            if (newFile) {
+                int len;
+                RandomAccessFile raf_write = new RandomAccessFile(file, "rw");
+                // 向分块文件写入数据
+                while ((len = raf_read.read(buffer)) != -1) {
+                    raf_write.write(buffer, 0, len);
+                    // 写满就停
+                    if (file.length() >= chunkSize)
+                        break;
+                }
+                raf_write.close();
+            }
+        }
+        raf_read.close();
+        System.out.println("写入分块完毕");
     }
 
-    //调用minio接口合并分块
     @Test
-    public void testMerge() throws Exception {
-
-//        List<ComposeSource> sources = new ArrayList<>();
-//        for (int i = 0; i < 30; i++) {
-//            //指定分块文件的信息
-//            ComposeSource composeSource = ComposeSource.builder().bucket("testbucket").object("chunk/" + i).build();
-//            sources.add(composeSource);
-//        }
-
-        List<ComposeSource> sources = Stream.iterate(0, i -> ++i).limit(6).map(i -> ComposeSource.builder().bucket("testbucket").object("chunk/" + i).build()).collect(Collectors.toList());
-
-        //指定合并后的objectName等信息
-        ComposeObjectArgs composeObjectArgs = ComposeObjectArgs.builder()
-                .bucket("testbucket")
-                .object("merge01.mp4")
-                .sources(sources)//指定源文件
-                .build();
-        //合并文件,
-        //报错size 1048576 must be greater than 5242880，minio默认的分块文件大小为5M
-        minioClient.composeObject(composeObjectArgs);
-
+    public void testMerge() throws IOException {
+        // 块文件目录
+        File chunkFolder = new File("D:\\BaiduNetdiskDownload\\星际牛仔1998\\chunk\\");
+        // 源文件
+        File sourceFile = new File("D:\\BaiduNetdiskDownload\\星际牛仔1998\\星际牛仔1.mp4");
+        // 合并文件
+        File mergeFile = new File("D:\\BaiduNetdiskDownload\\星际牛仔1998\\星际牛仔1-1.mp4");
+        mergeFile.createNewFile();
+        // 用于写文件
+        RandomAccessFile raf_write = new RandomAccessFile(mergeFile, "rw");
+        // 缓冲区
+        byte[] buffer = new byte[1024];
+        // 文件名升序排序
+        File[] files = chunkFolder.listFiles();
+        List<File> fileList = Arrays.asList(files);
+        Collections.sort(fileList, Comparator.comparingInt(o -> Integer.parseInt(o.getName())));
+        // 合并文件
+        for (File chunkFile : fileList) {
+            RandomAccessFile raf_read = new RandomAccessFile(chunkFile, "r");
+            int len;
+            while ((len = raf_read.read(buffer)) != -1) {
+                raf_write.write(buffer, 0, len);
+            }
+            raf_read.close();
+        }
+        raf_write.close();
+        // 判断合并后的文件是否与源文件相同
+        FileInputStream fileInputStream = new FileInputStream(sourceFile);
+        FileInputStream mergeFileStream = new FileInputStream(mergeFile);
+        //取出原始文件的md5
+        String originalMd5 = DigestUtils.md5Hex(fileInputStream);
+        //取出合并文件的md5进行比较
+        String mergeFileMd5 = DigestUtils.md5Hex(mergeFileStream);
+        if (originalMd5.equals(mergeFileMd5)) {
+            System.out.println("合并文件成功");
+        } else {
+            System.out.println("合并文件失败");
+        }
     }
-
-
-
-    //批量清理分块文件
-
-
-
-
-
-
-
-
-
-
-
 }

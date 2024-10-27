@@ -17,69 +17,44 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * @author Mr.M
- * @version 1.0
- * @description 我的课程表接口
- * @date 2022/10/25 9:40
- */
-
 @Api(value = "我的课程表接口", tags = "我的课程表接口")
 @Slf4j
 @RestController
 public class MyCourseTablesController {
-
     @Autowired
     MyCourseTablesService myCourseTablesService;
-
 
     @ApiOperation("添加选课")
     @PostMapping("/choosecourse/{courseId}")
     public XcChooseCourseDto addChooseCourse(@PathVariable("courseId") Long courseId) {
-
-        //当前登录的用户
         SecurityUtil.XcUser user = SecurityUtil.getUser();
-        if(user == null){
-            XueChengPlusException.cast("请登录");
+        if (user == null) {
+            XueChengPlusException.cast("请登录后继续选课");
         }
-        //用户id
         String userId = user.getId();
-        //添加选课
-        XcChooseCourseDto xcChooseCourseDto = myCourseTablesService.addChooseCourse(userId, courseId);
-        return xcChooseCourseDto;
+        return myCourseTablesService.addChooseCourse(userId, courseId);
     }
 
     @ApiOperation("查询学习资格")
     @PostMapping("/choosecourse/learnstatus/{courseId}")
-    public XcCourseTablesDto getLearnstatus(@PathVariable("courseId") Long courseId) {
-        //当前登录的用户
+    public XcCourseTablesDto getLearnstatus(@PathVariable Long courseId) {
         SecurityUtil.XcUser user = SecurityUtil.getUser();
-        if(user == null){
-            XueChengPlusException.cast("请登录");
+        if (user == null) {
+            XueChengPlusException.cast("请登录后继续选课");
         }
-        //用户id
         String userId = user.getId();
-
-        XcCourseTablesDto learningStatus = myCourseTablesService.getLearningStatus(userId, courseId);
-
-        return learningStatus;
-
+        return myCourseTablesService.getLearningStatus(userId, courseId);
     }
 
     @ApiOperation("我的课程表")
     @GetMapping("/mycoursetable")
-    public PageResult<XcCourseTables> mycoursetable(MyCourseTableParams params) {
-        //当前登录的用户
+    public PageResult<XcCourseTables> myCourseTables(MyCourseTableParams params) {
         SecurityUtil.XcUser user = SecurityUtil.getUser();
-        if(user == null){
-            XueChengPlusException.cast("请登录");
+        if (user == null) {
+            XueChengPlusException.cast("请登录后查看课程表");
         }
-        //用户id
         String userId = user.getId();
         params.setUserId(userId);
-
-        PageResult<XcCourseTables> mycoursetables = myCourseTablesService.mycoursetables(params);
-        return mycoursetables;
+        return myCourseTablesService.myCourseTables(params);
     }
-
 }

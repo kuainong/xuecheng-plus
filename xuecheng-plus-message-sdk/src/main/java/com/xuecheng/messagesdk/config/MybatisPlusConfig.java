@@ -9,9 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * <P>
- * 		Mybatis-Plus 配置
- * </p>
+ * Mybatis-Plus 配置
  */
 @Configuration("messagesdk_mpconfig")
 @MapperScan("com.xuecheng.messagesdk.mapper")

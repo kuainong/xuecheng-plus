@@ -1,17 +1,19 @@
 package com.xuecheng.learning.config;
 
+import com.alibaba.fastjson.JSON;
+import com.xuecheng.messagesdk.model.po.MqMessage;
+import com.xuecheng.messagesdk.service.MqMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * @author Mr.M
- * @version 1.0
- * @description TODO
- * @date 2023/2/23 16:59
- */
+
 @Slf4j
 @Configuration
 public class PayNotifyConfig {
@@ -29,6 +31,7 @@ public class PayNotifyConfig {
         // 三个参数：交换机名称、是否持久化、当没有queue与其绑定时是否自动删除
         return new FanoutExchange(PAYNOTIFY_EXCHANGE_FANOUT, true, false);
     }
+
     //支付通知队列,且持久化
     @Bean(PAYNOTIFY_QUEUE)
     public Queue course_publish_queue() {
@@ -40,6 +43,5 @@ public class PayNotifyConfig {
     public Binding binding_course_publish_queue(@Qualifier(PAYNOTIFY_QUEUE) Queue queue, @Qualifier(PAYNOTIFY_EXCHANGE_FANOUT) FanoutExchange exchange) {
         return BindingBuilder.bind(queue).to(exchange);
     }
-
 
 }

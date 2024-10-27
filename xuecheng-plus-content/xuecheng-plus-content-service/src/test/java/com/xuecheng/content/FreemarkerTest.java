@@ -1,12 +1,11 @@
 package com.xuecheng.content;
 
-import com.xuecheng.content.mapper.TeachplanMapper;
 import com.xuecheng.content.model.dto.CoursePreviewDto;
-import com.xuecheng.content.model.dto.TeachplanDto;
 import com.xuecheng.content.service.CoursePublishService;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,48 +17,35 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
-import java.util.List;
 
-/**
- * @author Mr.M
- * @version 1.0
- * @description 测试freemarker页面静态化方法
- * @date 2023/2/12 9:24
- */
+
+@Slf4j
 @SpringBootTest
 public class FreemarkerTest {
-
     @Autowired
     CoursePublishService coursePublishService;
 
     @Test
     public void testGenerateHtmlByTemplate() throws IOException, TemplateException {
-
+        // 1. 创建一个FreeMarker配置：
         Configuration configuration = new Configuration(Configuration.getVersion());
-
-        //拿到classpath路径
+        // 2. 告诉FreeMarker在哪里可以找到模板文件。
         String classpath = this.getClass().getResource("/").getPath();
-        //指定模板的目录
-        configuration.setDirectoryForTemplateLoading(new File(classpath+"/templates/"));
-        //指定编码
+        log.debug("classpath:{}", classpath);
+        configuration.setDirectoryForTemplateLoading(new File(classpath + "/templates/"));
+        // 2.1 指定字符编码
         configuration.setDefaultEncoding("utf-8");
-
-        //得到模板
-        Template template = configuration.getTemplate("course_template.ftl");
-        //准备数据
-        CoursePreviewDto coursePreviewInfo = coursePublishService.getCoursePreviewInfo(120L);
+        // 3. 创建一个数据模型，与模板文件中的数据模型类型保持一致，这里是CoursePreviewDto类型
+        CoursePreviewDto coursePreviewDto = coursePublishService.getCoursePreviewInfo(160L);
         HashMap<String, Object> map = new HashMap<>();
-        map.put("model",coursePreviewInfo);
-
-        //Template template 模板, Object model 数据
-        String html = FreeMarkerTemplateUtils.processTemplateIntoString(template, map);
-        //输入流
-        InputStream inputStream = IOUtils.toInputStream(html, "utf-8");
-        //输出文件
-        FileOutputStream outputStream = new FileOutputStream(new File("D:\\develop\\upload\\120.html"));
-        //使用流将html写入文件
-        IOUtils.copy(inputStream,outputStream);
-
-
+        map.put("model", coursePreviewDto);
+        // 4. 加载模板文件
+        Template template = configuration.getTemplate("course_template.ftl");
+        // 5. 将数据模型应用于模板
+        String content = FreeMarkerTemplateUtils.processTemplateIntoString(template, map);
+        InputStream inputStream = IOUtils.toInputStream(content);
+        FileOutputStream fileOutputStream = new FileOutputStream("D:\\test11.html");
+        IOUtils.copy(inputStream, fileOutputStream);
     }
+
 }

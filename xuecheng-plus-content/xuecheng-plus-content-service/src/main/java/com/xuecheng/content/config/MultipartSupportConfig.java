@@ -21,12 +21,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.OutputStream;
 
-/**
- * @author Mr.M
- * @version 1.0
- * @description TODO
- * @date 2022/10/15 22:13
- */
 @Configuration
 public class MultipartSupportConfig {
 
@@ -44,7 +38,7 @@ public class MultipartSupportConfig {
     public static MultipartFile getMultipartFile(File file) {
         FileItem item = new DiskFileItemFactory().createItem("file", MediaType.MULTIPART_FORM_DATA_VALUE, true, file.getName());
         try (FileInputStream inputStream = new FileInputStream(file);
-             OutputStream outputStream = item.getOutputStream();) {
+             OutputStream outputStream = item.getOutputStream()) {
             IOUtils.copy(inputStream, outputStream);
 
         } catch (Exception e) {

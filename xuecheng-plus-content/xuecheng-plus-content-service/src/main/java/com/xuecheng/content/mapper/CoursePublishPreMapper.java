@@ -8,7 +8,7 @@ import com.xuecheng.content.model.po.CoursePublishPre;
  * 课程发布 Mapper 接口
  * </p>
  *
- * @author itcast
+ * @author cyborg2077
  */
 public interface CoursePublishPreMapper extends BaseMapper<CoursePublishPre> {
 

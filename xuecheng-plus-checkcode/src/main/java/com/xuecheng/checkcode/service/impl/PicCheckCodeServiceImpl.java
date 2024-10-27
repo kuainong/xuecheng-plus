@@ -42,7 +42,7 @@ public class PicCheckCodeServiceImpl extends AbstractCheckCodeService implements
     }
 
 
-    @Resource(name="RedisCheckCodeStore")
+    @Resource(name="MemoryCheckCodeStore")
     @Override
     public void setCheckCodeStore(CheckCodeStore checkCodeStore) {
         this.checkCodeStore = checkCodeStore;
@@ -51,7 +51,7 @@ public class PicCheckCodeServiceImpl extends AbstractCheckCodeService implements
 
     @Override
     public CheckCodeResultDto generate(CheckCodeParamsDto checkCodeParamsDto) {
-        GenerateResult generate = generate(checkCodeParamsDto, 4, "checkcode:", 300);
+        GenerateResult generate = generate(checkCodeParamsDto, 4, "checkcode:", 60);
         String key = generate.getKey();
         String code = generate.getCode();
         String pic = createPic(code);

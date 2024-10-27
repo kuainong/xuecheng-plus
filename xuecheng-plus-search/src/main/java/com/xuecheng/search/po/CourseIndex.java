@@ -70,8 +70,6 @@ public class CourseIndex implements Serializable {
      */
     private String stName;
 
-
-
     /**
      * 课程等级
      */
@@ -127,6 +125,4 @@ public class CourseIndex implements Serializable {
      * 课程有效期天数
      */
     private Integer validDays;
-
-
 }

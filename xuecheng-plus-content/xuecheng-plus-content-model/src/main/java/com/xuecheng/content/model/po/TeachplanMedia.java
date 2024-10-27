@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * 
  * </p>
  *
- * @author itcast
+ * @author cyborg2077
  */
 @Data
 @TableName("teachplan_media")

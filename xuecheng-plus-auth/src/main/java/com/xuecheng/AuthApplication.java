@@ -15,8 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-
-@EnableFeignClients(basePackages = "com.xuecheng.ucenter.feignclient")
+@EnableFeignClients
 @SpringBootApplication
 public class AuthApplication {
 
@@ -29,5 +28,4 @@ public class AuthApplication {
         RestTemplate restTemplate = new RestTemplate(new OkHttp3ClientHttpRequestFactory());
         return  restTemplate;
     }
-
 }

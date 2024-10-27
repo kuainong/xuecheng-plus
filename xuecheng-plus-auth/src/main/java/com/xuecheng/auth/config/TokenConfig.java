@@ -24,13 +24,6 @@ public class TokenConfig {
 
     @Autowired
     TokenStore tokenStore;
-
-//    @Bean
-//    public TokenStore tokenStore() {
-//        //使用内存存储令牌（普通令牌）
-//        return new InMemoryTokenStore();
-//    }
-
     @Autowired
     private JwtAccessTokenConverter accessTokenConverter;
 
@@ -47,9 +40,9 @@ public class TokenConfig {
     }
 
     //令牌管理服务
-    @Bean(name="authorizationServerTokenServicesCustom")
+    @Bean(name = "authorizationServerTokenServicesCustom")
     public AuthorizationServerTokenServices tokenService() {
-        DefaultTokenServices service=new DefaultTokenServices();
+        DefaultTokenServices service = new DefaultTokenServices();
         service.setSupportRefreshToken(true);//支持刷新令牌
         service.setTokenStore(tokenStore);//令牌存储策略
 
@@ -61,6 +54,5 @@ public class TokenConfig {
         service.setRefreshTokenValiditySeconds(259200); // 刷新令牌默认有效期3天
         return service;
     }
-
 
 }

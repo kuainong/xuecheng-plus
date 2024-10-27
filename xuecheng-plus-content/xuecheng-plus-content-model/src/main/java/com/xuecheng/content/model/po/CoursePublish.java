@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * 课程发布
  * </p>
  *
- * @author itcast
+ * @author cyborg2077
  */
 @Data
 @TableName("course_publish")
@@ -115,8 +115,8 @@ public class CoursePublish implements Serializable {
     /**
      * 发布时间
      */
-    @JsonFormat(shape = JsonFormat.Shape.STRING,pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(fill = FieldFill.INSERT)
+    @JsonFormat(shape = JsonFormat.Shape.STRING,pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createDate;
 
     /**

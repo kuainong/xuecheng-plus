@@ -14,18 +14,16 @@ public class ElasticsearchConfig {
     private String hostlist;
 
     @Bean
-    public RestHighLevelClient restHighLevelClient(){
-        //解析hostlist配置信息
+    public RestHighLevelClient restHighLevelClient() {
+        //2. 解析hostlist配置信息
         String[] split = hostlist.split(",");
-        //创建HttpHost数组，其中存放es主机和端口的配置信息
+        //3. 创建HttpHost数组，其中存放es主机和端口的配置信息
         HttpHost[] httpHostArray = new HttpHost[split.length];
-        for(int i=0;i<split.length;i++){
+        for (int i = 0; i < split.length; i++) {
             String item = split[i];
             httpHostArray[i] = new HttpHost(item.split(":")[0], Integer.parseInt(item.split(":")[1]), "http");
         }
-        //创建RestHighLevelClient客户端
+        //4. 创建RestHighLevelClient客户端
         return new RestHighLevelClient(RestClient.builder(httpHostArray));
     }
-
-
 }

@@ -38,336 +38,265 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-/**
- * @author Mr.M
- * @version 1.0
- * @description 订单相关的接口
- * @date 2023/2/26 10:12
- */
 @Slf4j
 @Service
 public class OrderServiceImpl implements OrderService {
-
-    @Autowired
-    XcOrdersMapper ordersMapper;
-
-    @Autowired
-    XcOrdersGoodsMapper ordersGoodsMapper;
-
-    @Autowired
-    MqMessageService mqMessageService;
-
-    @Autowired
-    XcPayRecordMapper payRecordMapper;
-
-    @Autowired
-    RabbitTemplate rabbitTemplate;
-
-    @Autowired
-    OrderServiceImpl currentProxy;
-
-    @Value("${pay.qrcodeurl}")
-    String qrcodeurl;
-
     @Value("${pay.alipay.APP_ID}")
     String APP_ID;
+
     @Value("${pay.alipay.APP_PRIVATE_KEY}")
     String APP_PRIVATE_KEY;
 
     @Value("${pay.alipay.ALIPAY_PUBLIC_KEY}")
     String ALIPAY_PUBLIC_KEY;
+    @Autowired
+    XcOrdersMapper xcOrdersMapper;
 
-    @Transactional
+    @Autowired
+    XcPayRecordMapper xcPayRecordMapper;
+
+    @Autowired
+    XcOrdersGoodsMapper xcOrdersGoodsMapper;
+
+    @Autowired
+    MqMessageService mqMessageService;
+
+    @Autowired
+    RabbitTemplate rabbitTemplate;
+
+    @Value("${pay.qrcodeurl}")
+    String qrcodeurl;
+
     @Override
     public PayRecordDto createOrder(String userId, AddOrderDto addOrderDto) {
-
-        //插入订单表,订单主表，订单明细表
-        XcOrders xcOrders = saveXcOrders(userId, addOrderDto);
-
-        //插入支付记录
-        XcPayRecord payRecord = createPayRecord(xcOrders);
-        Long payNo = payRecord.getPayNo();
-
-        //生成二维码
-        QRCodeUtil qrCodeUtil = new QRCodeUtil();
-        //支付二维码的url
-        String url = String.format(qrcodeurl, payNo);
-        //二维码图片
+        // 1. 添加商品订单
+        XcOrders orders = saveOrders(userId, addOrderDto);
+        // 2. 添加支付交易记录
+        XcPayRecord payRecord = createPayRecord(orders);
+        // 3. 生成二维码
         String qrCode = null;
         try {
-            qrCode = qrCodeUtil.createQRCode(url, 200, 200);
+            qrcodeurl = String.format(qrcodeurl, payRecord.getPayNo());
+            qrCode = new QRCodeUtil().createQRCode(qrcodeurl, 200, 200);
         } catch (IOException e) {
             XueChengPlusException.cast("生成二维码出错");
         }
-
         PayRecordDto payRecordDto = new PayRecordDto();
-        BeanUtils.copyProperties(payRecord,payRecordDto);
+        BeanUtils.copyProperties(payRecord, payRecordDto);
         payRecordDto.setQrcode(qrCode);
-
         return payRecordDto;
     }
 
     @Override
-    public XcPayRecord getPayRecordByPayno(String payNo) {
-        XcPayRecord xcPayRecord = payRecordMapper.selectOne(new LambdaQueryWrapper<XcPayRecord>().eq(XcPayRecord::getPayNo, payNo));
-        return xcPayRecord;
+    public XcPayRecord getPayRecordByPayNo(String payNo) {
+        return xcPayRecordMapper.selectOne(new LambdaQueryWrapper<XcPayRecord>().eq(XcPayRecord::getPayNo, payNo));
     }
 
     @Override
     public PayRecordDto queryPayResult(String payNo) {
 
-        //调用支付宝的接口查询支付结果
+        // 1. 调用支付宝接口查询支付结果
         PayStatusDto payStatusDto = queryPayResultFromAlipay(payNo);
 
-        System.out.println(payStatusDto);
-        //拿到支付结果更新支付记录表和订单表的支付状态
-        currentProxy.saveAliPayStatus(payStatusDto);
-        //要返回最新的支付记录信息
-        XcPayRecord payRecordByPayno = getPayRecordByPayno(payNo);
-        PayRecordDto payRecordDto = new PayRecordDto();
-        BeanUtils.copyProperties(payRecordByPayno,payRecordDto);
+        // 2. 拿到支付结果，更新支付记录表和订单表的状态为 已支付
+        saveAlipayStatus(payStatusDto);
 
-        return payRecordDto;
+        return null;
     }
 
     /**
-     * 请求支付宝查询支付结果
-     * @param payNo 支付交易号
-     * @return 支付结果
+     * 调用支付宝接口查询支付结果
+     *
+     * @param payNo 支付记录id
+     * @return 支付记录信息
      */
-    public PayStatusDto queryPayResultFromAlipay(String payNo){
+    public PayStatusDto queryPayResultFromAlipay(String payNo) {
 
-        AlipayClient alipayClient = new DefaultAlipayClient(AlipayConfig.URL, APP_ID, APP_PRIVATE_KEY, AlipayConfig.FORMAT, AlipayConfig.CHARSET, ALIPAY_PUBLIC_KEY,AlipayConfig.SIGNTYPE);
+        //========请求支付宝查询支付结果=============
+        AlipayClient alipayClient = new DefaultAlipayClient(AlipayConfig.URL, APP_ID, APP_PRIVATE_KEY, "json", AlipayConfig.CHARSET, ALIPAY_PUBLIC_KEY, AlipayConfig.SIGNTYPE); //获得初始化的AlipayClient
         AlipayTradeQueryRequest request = new AlipayTradeQueryRequest();
         JSONObject bizContent = new JSONObject();
         bizContent.put("out_trade_no", payNo);
-        //bizContent.put("trade_no", "2014112611001004680073956707");
         request.setBizContent(bizContent.toString());
-        //支付宝返回的信息
-        String body = null;
+        AlipayTradeQueryResponse response = null;
         try {
-            AlipayTradeQueryResponse response = alipayClient.execute ( request ); //通过alipayClient调用API，获得对应的response类
-            if(!response.isSuccess()){//交易不成功
-                XueChengPlusException.cast("请求支付宝查询支付结果失败");
+            response = alipayClient.execute(request);
+            if (!response.isSuccess()) {
+                XueChengPlusException.cast("请求支付查询查询失败");
             }
-            body = response.getBody();
         } catch (AlipayApiException e) {
-            e.printStackTrace();
-           XueChengPlusException.cast("请求支付查询支付结果异常");
+            log.error("请求支付宝查询支付结果异常:{}", e.toString(), e);
+            XueChengPlusException.cast("请求支付查询查询失败");
         }
-        Map bodyMap = JSON.parseObject(body, Map.class);
-        Map alipay_trade_query_response = (Map) bodyMap.get("alipay_trade_query_response");
 
-        //解析支付结果
-        String trade_no = (String) alipay_trade_query_response.get("trade_no");
+        //获取支付结果
+        String resultJson = response.getBody();
+        //转map
+        Map resultMap = JSON.parseObject(resultJson, Map.class);
+        Map alipay_trade_query_response = (Map) resultMap.get("alipay_trade_query_response");
+        //支付结果
         String trade_status = (String) alipay_trade_query_response.get("trade_status");
         String total_amount = (String) alipay_trade_query_response.get("total_amount");
+        String trade_no = (String) alipay_trade_query_response.get("trade_no");
+        //保存支付结果
         PayStatusDto payStatusDto = new PayStatusDto();
         payStatusDto.setOut_trade_no(payNo);
-        payStatusDto.setTrade_no(trade_no);//支付宝的交易号
-        payStatusDto.setTrade_status(trade_status);//交易状态
+        payStatusDto.setTrade_status(trade_status);
         payStatusDto.setApp_id(APP_ID);
-        payStatusDto.setTotal_amount(total_amount);//总金额
-
-
+        payStatusDto.setTrade_no(trade_no);
+        payStatusDto.setTotal_amount(total_amount);
         return payStatusDto;
+
     }
 
     /**
-     * @description 保存支付宝支付结果
-     * @param payStatusDto  支付结果信息 从支付宝查询到的信息
-     * @return void
-     * @author Mr.M
-     * @date 2022/10/4 16:52
+     * 保存支付结果信息
+     *
+     * @param payStatusDto 支付结果信息
      */
-    @Transactional
-    public void saveAliPayStatus(PayStatusDto payStatusDto){
-        //支付记录号
-        String payNO = payStatusDto.getOut_trade_no();
-        XcPayRecord payRecordByPayno = getPayRecordByPayno(payNO);
-        if(payRecordByPayno == null){
-            XueChengPlusException.cast("找不到相关的支付记录");
+    public void saveAlipayStatus(PayStatusDto payStatusDto) {
+        // 1. 获取支付流水号
+        String payNo = payStatusDto.getOut_trade_no();
+        // 2. 查询数据库订单状态
+        XcPayRecord payRecord = getPayRecordByPayNo(payNo);
+        if (payRecord == null) {
+            XueChengPlusException.cast("未找到支付记录");
         }
-        //拿到相关联的订单id
-        Long orderId = payRecordByPayno.getOrderId();
-        XcOrders xcOrders = ordersMapper.selectById(orderId);
-        if(xcOrders == null){
+        XcOrders order = xcOrdersMapper.selectById(payRecord.getOrderId());
+        if (order == null) {
             XueChengPlusException.cast("找不到相关联的订单");
         }
-        //支付状态
-        String statusFromDb = payRecordByPayno.getStatus();
-        //如果数据库支付的状态已经是成功了，不再处理了
-        if("601002".equals(statusFromDb)){
-            return ;
+        String statusFromDB = payRecord.getStatus();
+        // 2.1 已支付，直接返回
+        if ("600002".equals(statusFromDB)) {
+            return;
         }
-
-        //如果支付成功
-        String trade_status = payStatusDto.getTrade_status();//从支付宝查询到的支付结果
-        if(trade_status.equals("TRADE_SUCCESS")){//支付宝返回的信息为支付成功
-            //更新支付记录表的状态为支付成功
-            payRecordByPayno.setStatus("601002");
-            //支付宝的订单号
-            payRecordByPayno.setOutPayNo(payStatusDto.getTrade_no());
-            //第三方支付渠道编号
-            payRecordByPayno.setOutPayChannel("Alipay");
-            //支付成功时间
-            payRecordByPayno.setPaySuccessTime(LocalDateTime.now());
-            payRecordMapper.updateById(payRecordByPayno);
-
-            //更新订单表的状态为支付成功
-            xcOrders.setStatus("600002");//订单状态为交易成功
-            ordersMapper.updateById(xcOrders);
-
-            //将消息写到数据库
-            MqMessage mqMessage = mqMessageService.addMessage("payresult_notify", xcOrders.getOutBusinessId(), xcOrders.getOrderType(), null);
-            //发送消息
-            notifyPayResult(mqMessage);
-
+        // 3. 查询支付宝交易状态
+        String tradeStatus = payStatusDto.getTrade_status();
+        // 3.1 支付宝交易已成功，保存订单表和交易记录表，更新交易状态
+        if ("TRADE_SUCCESS".equals(tradeStatus)) {
+            // 更新支付交易表
+            payRecord.setStatus("601002");
+            payRecord.setOutPayNo(payStatusDto.getTrade_no());
+            payRecord.setOutPayChannel("Alipay");
+            payRecord.setPaySuccessTime(LocalDateTime.now());
+            int updateRecord = xcPayRecordMapper.updateById(payRecord);
+            if (updateRecord <= 0) {
+                XueChengPlusException.cast("更新支付交易表失败");
+            }
+            // 更新订单表
+            order.setStatus("600002");
+            int updateOrder = xcOrdersMapper.updateById(order);
+            if (updateOrder <= 0) {
+                log.debug("更新订单表失败");
+                XueChengPlusException.cast("更新订单表失败");
+            }
         }
-
-
-
-
+        // 4. 保存消息记录，参数1：支付结果类型通知；参数2：业务id；参数3：业务类型
+        MqMessage mqMessage = mqMessageService.addMessage("payresult_notify", order.getOutBusinessId(), order.getOrderType(), null);
+        // 5. 通知消息
+        notifyPayResult(mqMessage);
     }
-
-
 
     @Override
-    public void notifyPayResult(MqMessage message) {
-
-        //消息内容
-        String jsonString = JSON.toJSONString(message);
-        //创建一个持久化消息
-        Message messageObj = MessageBuilder.withBody(jsonString.getBytes(StandardCharsets.UTF_8)).setDeliveryMode(MessageDeliveryMode.PERSISTENT).build();
-
-        //消息id
-        Long id = message.getId();
-
-        //全局消息id
-        CorrelationData correlationData = new CorrelationData(id.toString());
-
-        //使用correlationData指定回调方法
-        correlationData.getFuture().addCallback(result->{
-            if(result.isAck()){
-                //消息成功发送到了交换机
-                log.debug("发送消息成功:{}",jsonString);
-                //将消息从数据库表mq_message删除
-                mqMessageService.completed(id);
-
-            }else{
-                //消息发送失败
-                log.debug("发送消息失败:{}",jsonString);
+    public void notifyPayResult(MqMessage mqMessage) {
+        // 1. 将消息体转为Json
+        String jsonMsg = JSON.toJSONString(mqMessage);
+        // 2. 设消息的持久化方式为PERSISTENT，即消息会被持久化到磁盘上，确保即使在RabbitMQ服务器重启后也能够恢复消息。
+        Message msgObj = MessageBuilder.withBody(jsonMsg.getBytes()).setDeliveryMode(MessageDeliveryMode.PERSISTENT).build();
+        // 3. 封装CorrelationData，
+        CorrelationData correlationData = new CorrelationData(mqMessage.getId().toString());
+        correlationData.getFuture().addCallback(result -> {
+            if (result.isAck()) {
+                // 3.1 消息发送成功，删除消息表中的记录
+                log.debug("消息发送成功：{}", jsonMsg);
+                mqMessageService.completed(mqMessage.getId());
+            } else {
+                // 3.2 消息发送失败
+                log.error("消息发送失败，id：{}，原因：{}", mqMessage.getId(), result.getReason());
             }
-
-        },ex->{
-            //发生异常了
-            log.debug("发送消息异常:{}",jsonString);
+        }, ex -> {
+            // 3.3 消息异常
+            log.error("消息发送异常，id：{}，原因：{}", mqMessage.getId(), ex.getMessage());
         });
-        //发送消息
-        rabbitTemplate.convertAndSend(PayNotifyConfig.PAYNOTIFY_EXCHANGE_FANOUT,"",messageObj,correlationData);
+        // 4. 发送消息
+        rabbitTemplate.convertAndSend(PayNotifyConfig.PAYNOTIFY_EXCHANGE_FANOUT, "", msgObj, correlationData);
     }
 
     /**
-     * 保存支付记录
-     * @param orders
+     * 保存订单信息，保存订单表和订单明细表，需要做幂等性判断
+     *
+     * @param userId      用户id
+     * @param addOrderDto 选课信息
      * @return
      */
-    public XcPayRecord createPayRecord(XcOrders orders){
-        //订单id
-        Long orderId = orders.getId();
-        XcOrders xcOrders = ordersMapper.selectById(orderId);
-        //如果此订单不存在不能添加支付记录
-        if(xcOrders == null){
-            XueChengPlusException.cast("订单不存在");
+    @Transactional
+    public XcOrders saveOrders(String userId, AddOrderDto addOrderDto) {
+        // 1. 幂等性判断
+        XcOrders order = getOrderByBusinessId(addOrderDto.getOutBusinessId());
+        if (order != null) {
+            return order;
         }
-        //订单状态
-        String status = xcOrders.getStatus();
-        //如果此订单支付结果为成功，不再添加支付记录，避免重复支付
-        if("601002".equals(status)){//支付成功
-            XueChengPlusException.cast("此订单已支付");
+        // 2. 插入订单表
+        order = new XcOrders();
+        BeanUtils.copyProperties(addOrderDto, order);
+        order.setId(IdWorkerUtils.getInstance().nextId());
+        order.setCreateDate(LocalDateTime.now());
+        order.setUserId(userId);
+        order.setStatus("600001");
+        int insert = xcOrdersMapper.insert(order);
+        if (insert <= 0) {
+            XueChengPlusException.cast("插入订单记录失败");
         }
-        //添加支付记录
-        XcPayRecord xcPayRecord = new XcPayRecord();
-        xcPayRecord.setPayNo(IdWorkerUtils.getInstance().nextId());//支付记录号，将来要传给支付宝
-        xcPayRecord.setOrderId(orderId);
-        xcPayRecord.setOrderName(xcOrders.getOrderName());
-        xcPayRecord.setTotalPrice(xcOrders.getTotalPrice());
-        xcPayRecord.setCurrency("CNY");
-        xcPayRecord.setCreateDate(LocalDateTime.now());
-        xcPayRecord.setStatus("601001");//未支付
-        xcPayRecord.setUserId(xcOrders.getUserId());
-        int insert = payRecordMapper.insert(xcPayRecord);
-        if(insert<=0){
-            XueChengPlusException.cast("插入支付记录失败");
-        }
-        return xcPayRecord;
-    }
-
-    /**
-     * 保存订单信息
-     * @param userId
-     * @param addOrderDto
-     * @return
-     */
-    public XcOrders saveXcOrders(String userId, AddOrderDto addOrderDto){
-        //插入订单表,订单主表，订单明细表
-        //进行幂等性判断，同一个选课记录只能有一个订单
-        XcOrders xcOrders = getOrderByBusinessId(addOrderDto.getOutBusinessId());
-        if(xcOrders!=null){
-            return xcOrders;
-        }
-
-        //插入订单主表
-        xcOrders = new XcOrders();
-        //使用雪花算法生成订单号
-        xcOrders.setId(IdWorkerUtils.getInstance().nextId());
-        xcOrders.setTotalPrice(addOrderDto.getTotalPrice());
-        xcOrders.setCreateDate(LocalDateTime.now());
-        xcOrders.setStatus("600001");//未支付
-        xcOrders.setUserId(userId);
-        xcOrders.setOrderType("60201");//订单类型
-        xcOrders.setOrderName(addOrderDto.getOrderName());
-        xcOrders.setOrderDescrip(addOrderDto.getOrderDescrip());
-        xcOrders.setOrderDetail(addOrderDto.getOrderDetail());
-        xcOrders.setOutBusinessId(addOrderDto.getOutBusinessId());//如果是选课这里记录选课表的id
-        int insert = ordersMapper.insert(xcOrders);
-        if(insert<=0){
-            XueChengPlusException.cast("添加订单失败");
-        }
-        //订单id
-        Long orderId = xcOrders.getId();
-        //插入订单明细表
-        //将前端传入的明细json串转成List
-        String orderDetailJson = addOrderDto.getOrderDetail();
-        List<XcOrdersGoods> xcOrdersGoods = JSON.parseArray(orderDetailJson, XcOrdersGoods.class);
-        //遍历xcOrdersGoods插入订单明细表
-        xcOrdersGoods.forEach(goods->{
-
+        // 3. 插入订单明细表
+        Long orderId = order.getId();
+        String orderDetail = addOrderDto.getOrderDetail();
+        List<XcOrdersGoods> xcOrdersGoodsList = JSON.parseArray(orderDetail, XcOrdersGoods.class);
+        xcOrdersGoodsList.forEach(goods -> {
             goods.setOrderId(orderId);
-            //插入订单明细表
-            int insert1 = ordersGoodsMapper.insert(goods);
-
+            int insert1 = xcOrdersGoodsMapper.insert(goods);
+            if (insert1 <= 0) {
+                XueChengPlusException.cast("插入订单明细失败");
+            }
         });
-        return xcOrders;
-
+        return order;
     }
 
-
     /**
-     * 根据业务id查询订单 ,业务id是选课记录表中的主键
-     * @param businessId
+     * 根据业务id查询订单
+     *
+     * @param businessId 业务id是选课记录表中的主键
      * @return
      */
     public XcOrders getOrderByBusinessId(String businessId) {
-        XcOrders orders = ordersMapper.selectOne(new LambdaQueryWrapper<XcOrders>().eq(XcOrders::getOutBusinessId, businessId));
-        return orders;
+        return xcOrdersMapper.selectOne(new LambdaQueryWrapper<XcOrders>().eq(XcOrders::getOutBusinessId, businessId));
     }
 
-
+    public XcPayRecord createPayRecord(XcOrders orders) {
+        if (orders == null) {
+            XueChengPlusException.cast("订单不存在");
+        }
+        if ("600002".equals(orders.getStatus())) {
+            XueChengPlusException.cast("订单已支付");
+        }
+        XcPayRecord payRecord = new XcPayRecord();
+        payRecord.setPayNo(IdWorkerUtils.getInstance().nextId());
+        payRecord.setOrderId(orders.getId());
+        payRecord.setOrderName(orders.getOrderName());
+        payRecord.setTotalPrice(orders.getTotalPrice());
+        payRecord.setCurrency("CNY");
+        payRecord.setCreateDate(LocalDateTime.now());
+        payRecord.setStatus("601001");
+        payRecord.setUserId(orders.getUserId());
+        int insert = xcPayRecordMapper.insert(payRecord);
+        if (insert <= 0) {
+            XueChengPlusException.cast("插入支付交易记录失败");
+        }
+        return payRecord;
+    }
 
 }

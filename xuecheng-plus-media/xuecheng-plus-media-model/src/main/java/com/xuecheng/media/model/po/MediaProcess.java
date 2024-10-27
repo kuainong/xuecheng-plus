@@ -2,7 +2,6 @@ package com.xuecheng.media.model.po;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-import lombok.ToString;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -15,7 +14,6 @@ import java.time.LocalDateTime;
  * @author itcast
  */
 @Data
-@ToString
 @TableName("media_process")
 public class MediaProcess implements Serializable {
 
@@ -66,13 +64,6 @@ public class MediaProcess implements Serializable {
      * 失败原因
      */
     private String errormsg;
-
-    /**
-     * 失败次数
-     */
-    private int failCount;
-
-
 
 
 }

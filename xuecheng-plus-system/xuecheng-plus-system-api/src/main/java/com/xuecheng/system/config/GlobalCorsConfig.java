@@ -3,33 +3,34 @@ package com.xuecheng.system.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 /**
  * @author Mr.M
+ * @date 2022/10/8 11:04
  * @version 1.0
- * @description TODO
- * @date 2023/2/12 11:27
  */
-@Configuration
+ @Configuration
 public class GlobalCorsConfig {
 
-    @Bean
-    public CorsFilter corsFilter() {
+  @Bean
+ public CorsFilter getCorsFilter(){
 
-        CorsConfiguration config = new CorsConfiguration();
-        //允许白名单域名进行跨域调用
-        config.addAllowedOrigin("*");
-        //允许跨越发送cookie
-        config.setAllowCredentials(true);
-        //放行全部原始头信息
-        config.addAllowedHeader("*");
-        //允许所有请求方法跨域调用
-        config.addAllowedMethod("*");
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return new CorsFilter(source);
+   CorsConfiguration configuration= new CorsConfiguration();
 
-    }
+   //添加哪些http方法可以跨域，比如：GET,Post，（多个方法中间以逗号分隔），*号表示所有
+   configuration.addAllowedMethod("*");
+   //添加允许哪个请求进行跨域，*表示所有,可以具体指定http://localhost:8601表示只允许http://localhost:8601/跨域
+   configuration.addAllowedOrigin("*");
+   //所有头信息全部放行
+   configuration.addAllowedHeader("*");
+   //允许跨域发送cookie
+   configuration.setAllowCredentials(true);
+
+   UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
+   urlBasedCorsConfigurationSource.registerCorsConfiguration("/**",configuration);
+   return new CorsFilter(urlBasedCorsConfigurationSource);
+  }
 }
